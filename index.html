@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FindIt - Lost & Found Portal</title>
+  <style>
+    :root{
+      --bg:#f6f8fb;
+      --card:#ffffff;
+      --accent:#0b63ff;
+      --muted:#6b7280;
+    }
+    *{box-sizing:border-box;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Arial;margin:0;background:var(--bg);color:#111;}
+    .container{max-width:900px;margin:18px auto;padding:12px;}
+    .center{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px 12px;}
+    .card{background:var(--card);border-radius:12px;padding:12px;margin:8px 0;box-shadow:0 6px 18px rgba(0,0,0,0.06);}
+    h1{margin:6px 0 4px;font-size:28px;color:var(--accent);}
+    .muted{color:var(--muted);}
+    .small{font-size:13px;}
+    input,textarea{width:100%;padding:10px;border-radius:8px;border:1px solid #e6e9ef;margin:6px 0;font-size:15px;}
+    textarea{min-height:80px;resize:vertical;}
+    button{cursor:pointer;}
+    .primary{background:var(--accent);color:#fff;border:0;padding:10px 12px;border-radius:10px;font-weight:600;}
+    .secondary{background:transparent;border:1px solid #ddd;padding:8px 10px;border-radius:10px;}
+    .hidden{display:none;}
+    .topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.04);}
+    .link{color:var(--accent);text-decoration:none;}
+    .grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:8px;}
+    .item-card{display:flex;gap:10px;align-items:flex-start;}
+    .imgwrap{width:120px;height:90px;flex:0 0 120px;border-radius:10px;overflow:hidden;background:#f1f3f5;}
+    .imgwrap img{width:100%;height:100%;object-fit:cover;display:block;}
+    .itembody{flex:1;}
+    .itembody h3{margin:4px 0;}
+    .card-actions{display:flex;gap:8px;margin-top:8px;}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+    @media(min-width:720px){.grid{grid-template-columns:repeat(2,1fr)}}
+    #notifBar {
+      display: none;
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #facc15;
+      color: #111;
+      padding: 8px 16px;
+      border-radius: 10px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+      z-index: 1000;
+      font-weight: 600;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+  </style>
+  <!-- Firebase App (core) -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <!-- Firestore -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script>
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyBuVkpBvaVaJuksGQRbA_ylxti6b-gTBnY",
+      authDomain: "findit-e609d.firebaseapp.com",
+      projectId: "findit-e609d",
+      storageBucket: "findit-e609d.appspot.com",
+      messagingSenderId: "767325594727",
+      appId: "1:767325594727:web:322a7050fb4c3eb0ba20c2"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+  </script>
+</head>
+<body>
+
+  <!-- LOGIN PAGE -->
+  <div id="page-login" class="container center">
+    <h1>FindIt</h1>
+    <p class="muted">Login with your name and mobile number</p>
+    <form id="loginForm" class="card">
+      <label>Name</label>
+      <input type="text" id="loginName" required placeholder="Your name">
+      <label>Mobile Number</label>
+      <input type="tel" id="loginMobile" required placeholder="10-digit mobile">
+      <button type="submit" class="primary">Login</button>
+    </form>
+  </div>
+
+  <!-- MAIN PAGE -->
+  <div id="page-main" class="hidden">
+    <header class="topbar">
+      <span id="userInfo"></span>
+      <div>
+        <button id="gotoUpload" class="secondary">+ Upload</button>
+        <button id="myUploadsBtn" class="secondary">My Uploads</button>
+        <button id="showAllBtn" class="secondary hidden">Show All</button>
+        <button id="logoutBtn" class="secondary">Logout</button>
+      </div>
+    </header>
+    
+    <div id="notifBar"></div>
+
+    <main class="container">
+      <div class="controls card">
+        <input id="searchInput" placeholder="Search item name or description">
+        <button id="refreshBtn" class="secondary">Refresh</button>
+      </div>
+
+      <div id="itemsContainer" class="grid"></div>
+      <p class="muted small">Tip: Tap the phone number to call the finder directly.</p>
+    </main>
+  </div>
+
+  <!-- UPLOAD PAGE -->
+  <div id="page-upload" class="hidden">
+    <header class="topbar">
+      <button id="backToMain" class="secondary">← Back</button>
+      <span>Upload Found Item</span>
+    </header>
+    <main class="container">
+      <form id="uploadForm" class="card">
+        <label>Item Name</label>
+        <input type="text" id="itemName" required placeholder="e.g. Phone, Wallet">
+
+        <label>Description</label>
+        <textarea id="itemDesc" placeholder="Where it was found, color, brand..."></textarea>
+
+        <label>Image</label>
+        <input type="file" id="itemImage" accept="image/*" required>
+
+        <button type="submit" class="primary">Upload</button>
+      </form>
+    </main>
+  </div>
+
+  <script>
+    const qs = s => document.querySelector(s);
+    const show = id => document.getElementById(id).classList.remove('hidden');
+    const hide = id => document.getElementById(id).classList.add('hidden');
+    const escapeHtml = s => String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const formatDate = iso => new Date(iso).toLocaleString();
+
+    let currentUser = null;
+    let showMyUploads = false;
+
+    function showPage(page){
+      hide('page-login'); hide('page-main'); hide('page-upload');
+      show('page-'+page);
+    }
+
+    function showNotification(itemName){
+      const notif = document.getElementById('notifBar');
+      notif.innerText = `Item Uploaded: ${itemName}`;
+      notif.style.display = 'block';
+      setTimeout(()=>{ notif.style.opacity = '1'; }, 50);
+      setTimeout(()=>{
+        notif.style.opacity = '0';
+        setTimeout(()=>{ notif.style.display='none'; }, 500);
+      }, 3000);
+    }
+
+    // Login
+    qs('#loginForm').addEventListener('submit', e=>{
+      e.preventDefault();
+      const name = qs('#loginName').value.trim();
+      const mobile = qs('#loginMobile').value.trim();
+      if(!name || !mobile) return alert('Enter name and mobile.');
+      currentUser = {name, mobile};
+      localStorage.setItem('findit_user', JSON.stringify(currentUser));
+      initMain();
+      showPage('main');
+    });
+
+    // Logout
+    qs('#logoutBtn').addEventListener('click', ()=>{
+      localStorage.removeItem('findit_user');
+      currentUser = null;
+      showPage('login');
+    });
+
+    // Upload navigation
+    qs('#gotoUpload').addEventListener('click', ()=> showPage('upload'));
+    qs('#backToMain').addEventListener('click', ()=> showPage('main'));
+
+    // My Uploads / Show All
+    qs('#myUploadsBtn').addEventListener('click', ()=>{
+      showMyUploads = true;
+      qs('#myUploadsBtn').classList.add('hidden');
+      qs('#showAllBtn').classList.remove('hidden');
+      renderItems(qs('#searchInput').value);
+    });
+    qs('#showAllBtn').addEventListener('click', ()=>{
+      showMyUploads = false;
+      qs('#showAllBtn').classList.add('hidden');
+      qs('#myUploadsBtn').classList.remove('hidden');
+      renderItems(qs('#searchInput').value);
+    });
+
+    // Load user
+    function loadUser(){
+      const u = localStorage.getItem('findit_user');
+      if(u){ currentUser = JSON.parse(u); return true; }
+      return false;
+    }
+
+    function initMain(){
+      if(!loadUser()){ showPage('login'); return; }
+      qs('#userInfo').textContent = `Hi, ${currentUser.name}`;
+      renderItems();
+    }
+
+    // Render items (all / my uploads)
+    async function renderItems(filter=''){
+      const cont = qs('#itemsContainer');
+      cont.innerHTML = '<div class="card muted">Loading...</div>';
+      let q = filter.toLowerCase();
+      let snapshot;
+      try {
+        snapshot = await db.collection('items').orderBy('createdAt', 'desc').get();
+      } catch (err) {
+        cont.innerHTML = `<div class="card muted">Error loading items. Check your internet and Firebase setup.</div>`;
+        return;
+      }
+      let items = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
+      const filtered = items.filter(it => {
+        if(showMyUploads && it.uploaderMobile!==currentUser.mobile) return false;
+        if(!q) return true;
+        return (it.itemName||'').toLowerCase().includes(q) ||
+               (it.description||'').toLowerCase().includes(q) ||
+               (it.uploaderName||'').toLowerCase().includes(q);
+      });
+
+      cont.innerHTML = '';
+      if(filtered.length===0){
+        cont.innerHTML = `<div class="card muted">No items found${q?` for "${q}"`:''}.</div>`;
+        return;
+      }
+
+      filtered.forEach(it=>{
+        const card = document.createElement('div');
+        card.className='card item-card';
+        const canDelete = currentUser && currentUser.mobile===it.uploaderMobile;
+        card.innerHTML = `
+          <div class="imgwrap"><img src="${it.image}" alt="${escapeHtml(it.itemName)}"></div>
+          <div class="itembody">
+            <h3>${escapeHtml(it.itemName)}</h3>
+            <p class="muted small">${formatDate(it.createdAt)}</p>
+            <p>${escapeHtml(it.description||'')}</p>
+            <p><strong>Finder:</strong> ${escapeHtml(it.uploaderName)} 
+              • <a href="tel:${it.uploaderMobile}">${it.uploaderMobile}</a></p>
+            ${canDelete ? `<div class="card-actions"><button class="secondary btn-delete" data-id="${it.id}">Delete</button></div>` : ''}
+          </div>`;
+        cont.appendChild(card);
+      });
+
+      document.querySelectorAll('.btn-delete').forEach(btn=>{
+        btn.onclick = async e=>{
+          const id = e.target.dataset.id;
+          if(confirm('Delete this item?')){
+            try {
+              await db.collection('items').doc(id).delete();
+              renderItems(qs('#searchInput').value);
+            } catch (err) {
+              alert('Error deleting. Try again.');
+            }
+          }
+        };
+      });
+    }
+
+    // Search & refresh
+    qs('#searchInput').addEventListener('input', e=> renderItems(e.target.value));
+    qs('#refreshBtn').addEventListener('click', ()=> renderItems(qs('#searchInput').value));
+
+    // Upload item
+    qs('#uploadForm').addEventListener('submit', e=>{
+      e.preventDefault();
+      const file = qs('#itemImage').files[0];
+      if(!file) return alert('Select an image.');
+      const reader = new FileReader();
+      reader.onload = function(ev){
+        const img = new Image();
+        img.onload = async function(){
+          const canvas = document.createElement('canvas');
+          const maxW = 300;
+          const scale = Math.min(1, maxW / img.width);
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img,0,0,canvas.width,canvas.height);
+          const compressed = canvas.toDataURL('image/jpeg',0.7);
+
+          const itemName = qs('#itemName').value.trim();
+          const item = {
+            itemName:itemName,
+            description:qs('#itemDesc').value.trim(),
+            image:compressed,
+            uploaderName:currentUser.name,
+            uploaderMobile:currentUser.mobile,
+            createdAt:new Date().toISOString()
+          };
+          try {
+            await db.collection('items').add(item);
+            alert('Item uploaded successfully!');
+            showNotification(itemName);
+            e.target.reset();
+            showPage('main');
+            renderItems();
+          } catch (err) {
+            alert('Error uploading item. Check your internet and Firebase setup.');
+          }
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // On load
+    (function(){
+      if(loadUser()){ initMain(); showPage('main'); }
+      else showPage('login');
+    })();
+  </script>
+
+</body>
+</html>
